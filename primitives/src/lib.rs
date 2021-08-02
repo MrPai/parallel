@@ -17,6 +17,7 @@
 #![allow(clippy::upper_case_acronyms)]
 
 pub mod network;
+pub mod liquid_staking;
 
 use codec::{Decode, Encode};
 use sp_runtime::{
