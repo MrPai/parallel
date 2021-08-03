@@ -34,7 +34,7 @@ use orml_traits::{MultiCurrency, MultiCurrencyExtended};
 
 pub use pallet::*;
 use primitives::{Amount, Balance, CurrencyId, ExchangeRateProvider, Rate, Ratio};
-use primitives::liquid_staking::*;
+use primitives::liquid_staking::{EraIndex,LiquidStakingProtocol, LiquidStakingHub, Phase, RelaychainBridge,StakingOperation};
 
 /// Container for pending balance information
 #[derive(Encode, Decode, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default)]
@@ -99,8 +99,6 @@ pub mod pallet {
 
         /// Base xcm weight to use for cross chain transfer
         type BaseXcmWeight: Get<Weight>;
-
-        type Bridge: RelaychainBridge;
     }
 
     #[pallet::error]
@@ -181,6 +179,24 @@ pub mod pallet {
         T::AccountId,
         BoundedVec<UnstakeInfo<T::BlockNumber>, T::MaxAccountProcessingUnstake>,
     >;
+
+
+        	/// Current era index on Relaychain.
+	///
+	/// CurrentEra: EraIndex
+	#[pallet::storage]
+	#[pallet::getter(fn current_era)]
+	pub type CurrentEra<T: Config> = StorageValue<_, EraIndex, ValueQuery>;
+
+    //注意限制长度或者添加删除的逻辑，最大长度可以是BondDuration
+    #[pallet::storage]
+    #[pallet::getter(fn staking_operation_history)]
+    pub type StakingOperationHistory<T: Config> =
+        StorageMap<_, Blake2_128Concat, EraIndex, (StakingOperationType, StakingOperationStatus, Balance)>;
+
+    #[pallet::storage]
+	#[pallet::getter(fn current_phase)]
+	pub type CurrentPhase<T: Config> = StorageValue<_, Phase, ValueQuery>;
 
     #[pallet::genesis_config]
     pub struct GenesisConfig {
@@ -290,7 +306,7 @@ impl<T: Config> LiquidStakingProtocol for Pallet<T> {
         // 从bridge获取当前era index
         // 检查unstake队列，如果有xKSM的unstake请求，直接进行exchange，
         // 如果当个era内的xKSM被对冲到零，那么era结束时需要执行bond, 检查上个era是否执行了unbond，如果有，那么计算数量执行rebond
-        T::Bridge::bond_extra(1,1);
+        Self::request_stake();
         Ok(().into())
     }
 
@@ -321,7 +337,7 @@ impl<T: Config> LiquidStakingProtocol for Pallet<T> {
         // 从bridge获取当前era index
         // 
         // 
-        T::Bridge::unbond(1,1);
+        Self::request_unstake();
         Ok(().into())
     }
 
@@ -329,5 +345,63 @@ impl<T: Config> LiquidStakingProtocol for Pallet<T> {
         // 从bridge获取当前era index
         // 比较unstake时刻的claim与当前的era index
         Ok(().into())
+    }
+}
+
+
+impl<T: Config> LiquidStakingHub for Pallet<T> {
+    fn request_stake() -> DispatchResultWithPostInfo {
+        //stake操作不对冲unstake队列，直接返回xtoken，不记录每个用户的stake数据，只记录stake总额
+        Ok(().into())
+    }
+    fn request_unstake() -> DispatchResultWithPostInfo {
+        // unstake操作检查是否可以对冲stake总额，记录每个用户的unstake操作（eraindex/amount），以及总的unstake额度
+        Ok(().into())
+    }
+
+    fn trigger_new_era(era_index: EraIndex) -> DispatchResult {
+        ensure!(Self::current_phase() == Phase::Started,"big error");
+
+
+        CurrentPhase::<T>::put(Phase::UpdateEraIndex);
+        Ok(().into())
+    }
+    
+    fn record_reward() -> DispatchResultWithPostInfo{
+        // 由relaychain bridge调用，在每次era更新时记录reward
+        ensure!(Self::current_phase() == Phase::UpdateEraIndex,"big error");
+
+
+        CurrentPhase::<T>::put(Phase::RecordReward);
+    }
+
+    fn record_slash() -> DispatchResultWithPostInfo {
+        // 由relaychain bridge调用，在发生slash时调用，由insurrance pool进行对冲
+
+
+
+    }
+
+    
+}
+
+
+impl<T: Config> RelaychainBridgeHub for Pallet<T> {
+    fn request_to_relaychain() -> StakingOperation {
+        ensure!(Self::current_phase() == Phase::RecordReward,"big error");
+        // 读取stake queue和unstake queue的状态，比较差额后决定操作类型
+        // stake client在调用完这个方法后，还需要查询StakingOperationHistory的最新状态，然后决定如何调用relaychain
+        StakingOperationHistory::<T>::insert(Self::current_era(),(x,StakingOperationStatus::Ready,2));
+
+        CurrentPhase::<T>::put(Phase::DispatchToStaking);
+    }
+
+    //pallet type
+    //method type
+    //argument list
+    fn response_from_relaychain() -> StakingOperation {
+        ensure!(Self::current_phase() == Phase::DispatchToStaking,"big error");
+        StakingOperationHistory::<T>::insert(Self::current_era(),(StakingOperationType::BondExtra,StakingOperationStatus::Successed,2));
+        CurrentPhase::<T>::put(Phase::RecordStakingOperation);
     }
 }

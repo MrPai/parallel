@@ -34,7 +34,7 @@ use orml_traits::{MultiCurrency, MultiCurrencyExtended};
 
 pub use pallet::*;
 use primitives::{Amount, Balance, CurrencyId, ExchangeRateProvider, Rate, Ratio};
-use primitives::liquid_staking::*;
+use primitives::liquid_staking::{EraIndex,LiquidStakingHub, StakingOperationType, StakingOperationStatus,RelaychainBridgeHub,Phase};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -48,6 +48,8 @@ pub mod pallet {
     pub trait Config: frame_system::Config {
         /// The overarching event type.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+        type LiquidStakingHub: RelaychainBridgeHub;
     }
 
     #[pallet::error]
@@ -66,6 +68,8 @@ pub mod pallet {
         /// The voucher get unstaked successfully
         Unstaked(T::AccountId, Balance, Balance),
     }
+
+    
 
     #[pallet::genesis_config]
     pub struct GenesisConfig {
@@ -116,44 +120,121 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        // 这些主要由stake-client来调用
         #[pallet::weight(10_000)]
         #[transactional]
-        pub fn x1(
-            origin: OriginFor<T>, 
-            #[pallet::compact] amount: Balance
-        ) -> DispatchResultWithPostInfo {
-            Ok(().into())
-        }
-
-        #[pallet::weight(10_000)]
-        #[transactional]
-        pub fn x2(
+        pub fn request_to_relaychain(
             origin: OriginFor<T>,
             #[pallet::compact] amount: Balance,
         ) -> DispatchResultWithPostInfo {
+            // todo 将结果返回给调用方，可以尝试将本函数的返回结果是一串unsign的call 调用， stake-client拿到后可以直接签名并发送到relaychain上
+            Self::request_to_relaychain()?;
+            
             Ok(().into())
         }
 
+        // todo start from here， 尝试将record_reward/record_slash/trigger_new_era三个方法整合到下述这个方法里
+        // todo 直接使用call作为参数类型
         #[pallet::weight(10_000)]
         #[transactional]
-        pub fn x3(
+        pub fn response_from_relaychain(
             origin: OriginFor<T>,
             #[pallet::compact] amount: Balance,
         ) -> DispatchResultWithPostInfo {
+            Self::response_from_relaychain()?;
             Ok(().into())
         }
+
+        // #[pallet::weight(10_000)]
+        // #[transactional]
+        // pub fn reconciliation(
+        //     origin: OriginFor<T>,
+        //     #[pallet::compact] amount: Balance,
+        // ) -> DispatchResultWithPostInfo {
+        //     // 考虑是否增加这样一个对账接口，对比中继链与平行链的账本
+        //     ensure!(Self::current_phase() == Phase::RecordStakingOperation,"big error");
+
+        //     CurrentPhase::<T>::put(Phase::Started);
+        // }
     }
 }
 
 
-impl<T: Config> RelaychainBridge for Pallet<T> {
-    fn bond_extra(account_index: u32, amount: Balance) -> DispatchResult;
-	fn unbond(account_index: u32, amount: Balance) -> DispatchResult;
-	fn rebond(account_index: u32, amount: Balance) -> DispatchResult;
-	fn withdraw_unbonded(account_index: u32);
-	fn nominate(account_index: u32, targets: Vec<Self::PolkadotAccountId>);
-	fn transfer_to_relaychain(account_index: u32, from: &AccountId, amount: Balance) -> DispatchResult;
-	fn receive_from_relaychain(account_index: u32, to: &AccountId, amount: Balance) -> DispatchResult;
-	fn payout_stakers(account_index: u32, era: EraIndex);
+impl<T: Config> RelaychainBridgeHub for Pallet<T> {
+    fn request_to_relaychain() -> DispatchResultWithPostInfo{
+        T::LiquidStakingHub::request_to_relaychain();
+        Ok(().into())
+    }
+    //pallet type
+    //method type
+    //argument list
+	fn response_from_relaychain() -> DispatchResultWithPostInfo{
+        T::LiquidStakingHub::response_from_relaychain();
+
+
+        // 将以下3个方法wrap到call中
+        // #[pallet::weight(10_000)]
+        // #[transactional]
+        // pub fn trigger_new_era(
+        //     origin: OriginFor<T>, 
+        //     #[pallet::compact] amount: Balance
+        // ) -> DispatchResultWithPostInfo {
+            
+        //     T::LiquidStakingHub::trigger_new_era(1)?;
+            
+        //     Ok(().into())
+        // }
+
+        // #[pallet::weight(10_000)]
+        // #[transactional]
+        // pub fn record_reward(
+        //     origin: OriginFor<T>,
+        //     #[pallet::compact] amount: Balance,
+        // ) -> DispatchResultWithPostInfo {
+            
+        //     T::LiquidStakingHub::record_reward();
+            
+        //     Ok(().into())
+        // }
+
+        // #[pallet::weight(10_000)]
+        // #[transactional]
+        // pub fn record_slash(
+        //     origin: OriginFor<T>,
+        //     #[pallet::compact] amount: Balance,
+        // ) -> DispatchResultWithPostInfo {
+        //     T::LiquidStakingHub::record_slash();
+        //     Ok(().into())
+        // }
+
+        Ok(().into())
+    }
+
+    
+	// fn bond(account_index: u32, amount: Balance) -> DispatchResult{
+    //     Ok(().into())
+    // }
+	// fn bond_extra(account_index: u32, amount: Balance) -> DispatchResult{
+    //     Ok(().into())
+    // }
+	// fn unbond(account_index: u32, amount: Balance) -> DispatchResult{
+    //     Ok(().into())
+    // }
+	// fn rebond(account_index: u32, amount: Balance) -> DispatchResult{
+    //     Ok(().into())
+    // }
+	// fn withdraw_unbonded(account_index: u32){
+    //     Ok(().into())
+    // }
+	// fn nominate(account_index: u32, targets: Vec<Self::PolkadotAccountId>){
+    //     Ok(().into())
+    // }
+	// fn transfer_to_relaychain(account_index: u32, from: &AccountId, amount: Balance) -> DispatchResult{
+    //     Ok(().into())
+    // }
+	// fn receive_from_relaychain(account_index: u32, to: &AccountId, amount: Balance) -> DispatchResult{
+    //     Ok(().into())
+    // }
+	// fn payout_stakers(account_index: u32, era: EraIndex){
+    //     Ok(().into())
+    // }
 }
