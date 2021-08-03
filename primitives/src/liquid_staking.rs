@@ -53,9 +53,6 @@ pub trait LiquidStakingHub {
     fn trigger_new_era(era_index: EraIndex) -> DispatchResult;
     fn record_reward() -> DispatchResultWithPostInfo;
     fn record_slash() -> DispatchResultWithPostInfo;
-	// query liquidStaking pool status and decide whether to bond_extra/unbond/rebond
-    fn request_to_relaychain() -> StakingOperationType;
-	fn response_from_relaychain() -> StakingOperationType;
 	
 }
 
@@ -68,11 +65,11 @@ pub trait RelaychainBridgeHub<AccountId, BlockNumber, Balance, EraIndex>
 	type EraLength: Get<BlockNumber>;
 	type PolkadotAccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord + Default;
 	
-	fn request_to_relaychain() -> DispatchResultWithPostInfo;
-	fn response_from_relaychain() -> DispatchResultWithPostInfo;
 	
 	//调用此接口，stake client获取到具体应该调用relaychain的事件类型和相关信息
-	// fn emit_to_relaychain() -> DispatchResultWithPostInfo;
+	fn request_to_relaychain() -> StakingOperationType;
+	fn response_from_relaychain() -> DispatchResultWithPostInfo;
+	
 	
 	// fn bond(account_index: u32, amount: Balance) -> DispatchResult;
 	// fn bond_extra(account_index: u32, amount: Balance) -> DispatchResult;

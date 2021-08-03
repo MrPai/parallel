@@ -69,52 +69,6 @@ pub mod pallet {
         Unstaked(T::AccountId, Balance, Balance),
     }
 
-    
-
-    #[pallet::genesis_config]
-    pub struct GenesisConfig {
-        pub exchange_rate: Rate,
-        pub reserve_factor: Ratio,
-    }
-
-    #[cfg(feature = "std")]
-    impl Default for GenesisConfig {
-        fn default() -> Self {
-            Self {
-                exchange_rate: Rate::default(),
-                reserve_factor: Ratio::default(),
-            }
-        }
-    }
-
-    #[pallet::genesis_build]
-    impl<T: Config> GenesisBuild<T> for GenesisConfig {
-        fn build(&self) {
-            ExchangeRate::<T>::put(self.exchange_rate);
-            ReserveFactor::<T>::put(self.reserve_factor);
-        }
-    }
-
-    #[cfg(feature = "std")]
-    impl GenesisConfig {
-        /// Direct implementation of `GenesisBuild::build_storage`.
-        ///
-        /// Kept in order not to break dependency.
-        pub fn build_storage<T: Config>(&self) -> Result<sp_runtime::Storage, String> {
-            <Self as GenesisBuild<T>>::build_storage(self)
-        }
-
-        /// Direct implementation of `GenesisBuild::assimilate_storage`.
-        ///
-        /// Kept in order not to break dependency.
-        pub fn assimilate_storage<T: Config>(
-            &self,
-            storage: &mut sp_runtime::Storage,
-        ) -> Result<(), String> {
-            <Self as GenesisBuild<T>>::assimilate_storage(self, storage)
-        }
-    }
-
     #[pallet::hooks]
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
@@ -133,7 +87,7 @@ pub mod pallet {
         }
 
         // todo start from here， 尝试将record_reward/record_slash/trigger_new_era三个方法整合到下述这个方法里
-        // todo 直接使用call作为参数类型
+        // todo 直接使用call作为参数类型（但是call貌似必须是交易类型的方法，而不是trait的）
         #[pallet::weight(10_000)]
         #[transactional]
         pub fn response_from_relaychain(
@@ -161,6 +115,7 @@ pub mod pallet {
 
 impl<T: Config> RelaychainBridgeHub for Pallet<T> {
     fn request_to_relaychain() -> DispatchResultWithPostInfo{
+        // query liquidStaking pool status and decide whether to bond_extra/unbond/rebond
         T::LiquidStakingHub::request_to_relaychain();
         Ok(().into())
     }
@@ -171,40 +126,7 @@ impl<T: Config> RelaychainBridgeHub for Pallet<T> {
         T::LiquidStakingHub::response_from_relaychain();
 
 
-        // 将以下3个方法wrap到call中
-        // #[pallet::weight(10_000)]
-        // #[transactional]
-        // pub fn trigger_new_era(
-        //     origin: OriginFor<T>, 
-        //     #[pallet::compact] amount: Balance
-        // ) -> DispatchResultWithPostInfo {
-            
-        //     T::LiquidStakingHub::trigger_new_era(1)?;
-            
-        //     Ok(().into())
-        // }
-
-        // #[pallet::weight(10_000)]
-        // #[transactional]
-        // pub fn record_reward(
-        //     origin: OriginFor<T>,
-        //     #[pallet::compact] amount: Balance,
-        // ) -> DispatchResultWithPostInfo {
-            
-        //     T::LiquidStakingHub::record_reward();
-            
-        //     Ok(().into())
-        // }
-
-        // #[pallet::weight(10_000)]
-        // #[transactional]
-        // pub fn record_slash(
-        //     origin: OriginFor<T>,
-        //     #[pallet::compact] amount: Balance,
-        // ) -> DispatchResultWithPostInfo {
-        //     T::LiquidStakingHub::record_slash();
-        //     Ok(().into())
-        // }
+        
 
         Ok(().into())
     }

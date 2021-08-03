@@ -381,15 +381,14 @@ impl<T: Config> LiquidStakingHub for Pallet<T> {
 
 
     }
-
-    
 }
 
 
 impl<T: Config> RelaychainBridgeHub for Pallet<T> {
+    
     fn request_to_relaychain() -> StakingOperation {
         ensure!(Self::current_phase() == Phase::RecordReward,"big error");
-        // 读取stake queue和unstake queue的状态，比较差额后决定操作类型
+        // 读取stake queue和unstake queue的状态，比较差额后决定操作类型bond/unbond/rebond
         // stake client在调用完这个方法后，还需要查询StakingOperationHistory的最新状态，然后决定如何调用relaychain
         StakingOperationHistory::<T>::insert(Self::current_era(),(x,StakingOperationStatus::Ready,2));
 
@@ -400,6 +399,42 @@ impl<T: Config> RelaychainBridgeHub for Pallet<T> {
     //method type
     //argument list
     fn response_from_relaychain() -> StakingOperation {
+
+        // 将以下3个方法wrap到call中
+        // #[pallet::weight(10_000)]
+        // #[transactional]
+        // pub fn trigger_new_era(
+        //     origin: OriginFor<T>, 
+        //     #[pallet::compact] amount: Balance
+        // ) -> DispatchResultWithPostInfo {
+            
+        //     T::LiquidStakingHub::trigger_new_era(1)?;
+            
+        //     Ok(().into())
+        // }
+
+        // #[pallet::weight(10_000)]
+        // #[transactional]
+        // pub fn record_reward(
+        //     origin: OriginFor<T>,
+        //     #[pallet::compact] amount: Balance,
+        // ) -> DispatchResultWithPostInfo {
+            
+        //     T::LiquidStakingHub::record_reward();
+            
+        //     Ok(().into())
+        // }
+
+        // #[pallet::weight(10_000)]
+        // #[transactional]
+        // pub fn record_slash(
+        //     origin: OriginFor<T>,
+        //     #[pallet::compact] amount: Balance,
+        // ) -> DispatchResultWithPostInfo {
+        //     T::LiquidStakingHub::record_slash();
+        //     Ok(().into())
+        // }
+
         ensure!(Self::current_phase() == Phase::DispatchToStaking,"big error");
         StakingOperationHistory::<T>::insert(Self::current_era(),(StakingOperationType::BondExtra,StakingOperationStatus::Successed,2));
         CurrentPhase::<T>::put(Phase::RecordStakingOperation);
