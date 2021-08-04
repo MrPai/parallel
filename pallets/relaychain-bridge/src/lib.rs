@@ -33,11 +33,13 @@ use xcm::v0::{Junction, MultiLocation, NetworkId};
 use orml_traits::{MultiCurrency, MultiCurrencyExtended};
 
 pub use pallet::*;
-use primitives::{Amount, Balance, CurrencyId, ExchangeRateProvider, Rate, Ratio};
-use primitives::liquid_staking::{EraIndex,LiquidStakingHub, StakingOperationType, StakingOperationStatus,RelaychainBridgeHub,Phase};
+use primitives::{Amount, AccountId, Balance, CurrencyId, ExchangeRateProvider, Rate, Ratio};
+use primitives::liquid_staking::{EraIndex,LiquidStakingHub, StakingOperationType,Phase};
+use primitives::relaychain_bridge::{ParachainPallet,RelaychainBridgeHub,ResponseStatus};
 
 #[frame_support::pallet]
 pub mod pallet {
+
     use super::*;
 
     #[pallet::pallet]
@@ -49,7 +51,7 @@ pub mod pallet {
         /// The overarching event type.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-        type LiquidStakingHub: RelaychainBridgeHub;
+        type LiquidStakingHub: RelaychainBridgeHub<<Self as frame_system::Config>::AccountId>;
     }
 
     #[pallet::error]
@@ -78,11 +80,12 @@ pub mod pallet {
         #[transactional]
         pub fn request_to_relaychain(
             origin: OriginFor<T>,
-            #[pallet::compact] amount: Balance,
+            parachain_pallet: ParachainPallet,
         ) -> DispatchResultWithPostInfo {
+            let who = ensure_signed(origin)?;
             // todo 将结果返回给调用方，可以尝试将本函数的返回结果是一串unsign的call 调用， stake-client拿到后可以直接签名并发送到relaychain上
-            Self::request_to_relaychain()?;
-            
+            <Self as RelaychainBridgeHub<T::AccountId>>::request_to_relaychain(&who, &parachain_pallet)?;
+            // or 在pallet中触发事件，由链下进行监听，并转发到relaychain
             Ok(().into())
         }
 
@@ -92,9 +95,11 @@ pub mod pallet {
         #[transactional]
         pub fn response_from_relaychain(
             origin: OriginFor<T>,
-            #[pallet::compact] amount: Balance,
+            parachain_pallet: ParachainPallet,
+            response_status: ResponseStatus,
         ) -> DispatchResultWithPostInfo {
-            Self::response_from_relaychain()?;
+            let who = ensure_signed(origin)?;
+            <Self as RelaychainBridgeHub<T::AccountId>>::response_from_relaychain(&who, &parachain_pallet, &response_status)?;
             Ok(().into())
         }
 
@@ -113,50 +118,27 @@ pub mod pallet {
 }
 
 
-impl<T: Config> RelaychainBridgeHub for Pallet<T> {
-    fn request_to_relaychain() -> DispatchResultWithPostInfo{
-        // query liquidStaking pool status and decide whether to bond_extra/unbond/rebond
-        T::LiquidStakingHub::request_to_relaychain();
+impl<T: Config> RelaychainBridgeHub<T::AccountId> for Pallet<T> {
+    fn request_to_relaychain(
+        who: &T::AccountId, 
+        parachain_pallet: &ParachainPallet,
+    ) -> DispatchResultWithPostInfo{
+        let _ = match parachain_pallet {
+            ParachainPallet::LiquidStaking(_) => T::LiquidStakingHub::request_to_relaychain(who, parachain_pallet)?,
+        };
         Ok(().into())
     }
     //pallet type
     //method type
     //argument list
-	fn response_from_relaychain() -> DispatchResultWithPostInfo{
-        T::LiquidStakingHub::response_from_relaychain();
-
-
-        
-
+	fn response_from_relaychain(
+        who: &T::AccountId,
+        parachain_pallet: &ParachainPallet,
+        response_status: &ResponseStatus,
+    ) -> DispatchResultWithPostInfo{
+        let _ = match parachain_pallet {
+            ParachainPallet::LiquidStaking(_) => T::LiquidStakingHub::response_from_relaychain(who, parachain_pallet, response_status)?,
+        };
         Ok(().into())
     }
-
-    
-	// fn bond(account_index: u32, amount: Balance) -> DispatchResult{
-    //     Ok(().into())
-    // }
-	// fn bond_extra(account_index: u32, amount: Balance) -> DispatchResult{
-    //     Ok(().into())
-    // }
-	// fn unbond(account_index: u32, amount: Balance) -> DispatchResult{
-    //     Ok(().into())
-    // }
-	// fn rebond(account_index: u32, amount: Balance) -> DispatchResult{
-    //     Ok(().into())
-    // }
-	// fn withdraw_unbonded(account_index: u32){
-    //     Ok(().into())
-    // }
-	// fn nominate(account_index: u32, targets: Vec<Self::PolkadotAccountId>){
-    //     Ok(().into())
-    // }
-	// fn transfer_to_relaychain(account_index: u32, from: &AccountId, amount: Balance) -> DispatchResult{
-    //     Ok(().into())
-    // }
-	// fn receive_from_relaychain(account_index: u32, to: &AccountId, amount: Balance) -> DispatchResult{
-    //     Ok(().into())
-    // }
-	// fn payout_stakers(account_index: u32, era: EraIndex){
-    //     Ok(().into())
-    // }
 }

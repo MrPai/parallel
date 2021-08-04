@@ -34,7 +34,8 @@ use orml_traits::{MultiCurrency, MultiCurrencyExtended};
 
 pub use pallet::*;
 use primitives::{Amount, Balance, CurrencyId, ExchangeRateProvider, Rate, Ratio};
-use primitives::liquid_staking::{EraIndex,LiquidStakingProtocol, LiquidStakingHub, Phase, RelaychainBridge,StakingOperation};
+use primitives::liquid_staking::{EraIndex,LiquidStakingProtocol, LiquidStakingHub, Phase,StakingOperationType,LiquidStakingMethod};
+use primitives::relaychain_bridge::{RelaychainBridgeHub,ResponseStatus, ParachainPallet};
 
 /// Container for pending balance information
 #[derive(Encode, Decode, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default)]
@@ -46,6 +47,10 @@ pub struct UnstakeInfo<BlockNumber> {
 
 #[frame_support::pallet]
 pub mod pallet {
+    use std::collections::BTreeMap;
+
+    use frame_support::storage::bounded_btree_map;
+
     use super::*;
 
     #[pallet::pallet]
@@ -164,21 +169,21 @@ pub mod pallet {
     /// Key is the owner of assets.
     #[pallet::storage]
     #[pallet::getter(fn account_pending_unstake)]
-    pub type AccountPendingUnstake<T: Config> =
-        StorageMap<_, Blake2_128Concat, T::AccountId, UnstakeInfo<T::BlockNumber>>;
+    pub type Unstakes<T: Config> =
+        StorageMap<_, Blake2_128Concat, T::AccountId, Vec<(EraIndex,Balance)>>;
 
     /// The queue stores all the unstaking requests in process.
     /// Key1 is the mutilsig agent in relaychain, key2 is the owner of assets.
-    #[pallet::storage]
-    #[pallet::getter(fn unstaking_processing_queue)]
-    pub type AccountProcessingUnstake<T: Config> = StorageDoubleMap<
-        _,
-        Blake2_128Concat,
-        T::AccountId,
-        Blake2_128Concat,
-        T::AccountId,
-        BoundedVec<UnstakeInfo<T::BlockNumber>, T::MaxAccountProcessingUnstake>,
-    >;
+    // #[pallet::storage]
+    // #[pallet::getter(fn unstaking_processing_queue)]
+    // pub type AccountProcessingUnstake<T: Config> = StorageDoubleMap<
+    //     _,
+    //     Blake2_128Concat,
+    //     T::AccountId,
+    //     Blake2_128Concat,
+    //     T::AccountId,
+    //     BoundedVec<UnstakeInfo<T::BlockNumber>, T::MaxAccountProcessingUnstake>,
+    // >;
 
 
         	/// Current era index on Relaychain.
@@ -189,10 +194,11 @@ pub mod pallet {
 	pub type CurrentEra<T: Config> = StorageValue<_, EraIndex, ValueQuery>;
 
     //注意限制长度或者添加删除的逻辑，最大长度可以是BondDuration
+    //记录一些
     #[pallet::storage]
     #[pallet::getter(fn staking_operation_history)]
-    pub type StakingOperationHistory<T: Config> =
-        StorageMap<_, Blake2_128Concat, EraIndex, (StakingOperationType, StakingOperationStatus, Balance)>;
+    pub type StakingOperationHistory<T: Config> = 
+        StorageMap<_, Blake2_128Concat, EraIndex, BTreeMap<StakingOperationType,(Balance,ResponseStatus)>>;
 
     #[pallet::storage]
 	#[pallet::getter(fn current_phase)]
@@ -350,6 +356,7 @@ impl<T: Config> LiquidStakingProtocol for Pallet<T> {
 
 
 impl<T: Config> LiquidStakingHub for Pallet<T> {
+
     fn request_stake() -> DispatchResultWithPostInfo {
         //stake操作不对冲unstake队列，直接返回xtoken，不记录每个用户的stake数据，只记录stake总额
         Ok(().into())
@@ -359,6 +366,8 @@ impl<T: Config> LiquidStakingHub for Pallet<T> {
         Ok(().into())
     }
 
+
+
     fn trigger_new_era(era_index: EraIndex) -> DispatchResult {
         ensure!(Self::current_phase() == Phase::Started,"big error");
 
@@ -367,7 +376,8 @@ impl<T: Config> LiquidStakingHub for Pallet<T> {
         Ok(().into())
     }
     
-    fn record_reward() -> DispatchResultWithPostInfo{
+    //todo，将每个era接收的事件记录下来，存储到一个历史记录里
+    fn record_reward() -> DispatchResultWithPostInfo {
         // 由relaychain bridge调用，在每次era更新时记录reward
         ensure!(Self::current_phase() == Phase::UpdateEraIndex,"big error");
 
@@ -381,62 +391,107 @@ impl<T: Config> LiquidStakingHub for Pallet<T> {
 
 
     }
-}
 
+    fn record_bond_response() -> () {
 
-impl<T: Config> RelaychainBridgeHub for Pallet<T> {
-    
-    fn request_to_relaychain() -> StakingOperation {
+    }
+
+    fn record_bond_extra_response() -> DispatchResultWithPostInfo {
+        ensure!(Self::current_phase() == Phase::DispatchToStaking,"big error");
+        StakingOperationHistory::<T>::insert(Self::current_era(),(StakingOperationType::BondExtra,ResponseStatus::Successed,2));
+        CurrentPhase::<T>::put(Phase::RecordStakingOperation);
+    }
+
+    fn record_rebond_response() -> DispatchResultWithPostInfo {
+        
+    }
+
+    fn record_unbond_response() -> DispatchResultWithPostInfo {
+        
+    }
+
+    //需要记录区块高度，以及执行状态，以便于后期checkpoint的设置
+    //// query liquidStaking pool status and decide whether to bond_extra/unbond/rebond
+    fn emit_event_to_relaychain() -> DispatchResultWithPostInfo {
+
+        // 由relaychain bridge调用，在发生slash时调用，由insurrance pool进行对冲
+
         ensure!(Self::current_phase() == Phase::RecordReward,"big error");
         // 读取stake queue和unstake queue的状态，比较差额后决定操作类型bond/unbond/rebond
         // stake client在调用完这个方法后，还需要查询StakingOperationHistory的最新状态，然后决定如何调用relaychain
-        StakingOperationHistory::<T>::insert(Self::current_era(),(x,StakingOperationStatus::Ready,2));
+        StakingOperationHistory::<T>::insert(Self::current_era(),(x,ResponseStatus::Ready,2));
 
         CurrentPhase::<T>::put(Phase::DispatchToStaking);
+
+    }
+
+    fn transfer_to_relaychain(who: &T::AccountId, amount: Balance) -> DispatchResultWithPostInfo {
+        // todo xcm transfer
+        // trasfer操作可能在1个era内会有多次StakingOperationHistory
+    }
+
+
+}
+
+
+impl<T: Config> RelaychainBridgeHub<T::AccountId> for Pallet<T> {
+    
+    fn request_to_relaychain(
+        who: &T::AccountId, 
+        parachain_pallet: &ParachainPallet,
+    ) -> DispatchResultWithPostInfo {
+        if let ParachainPallet::LiquidStaking(m) = parachain_pallet {
+            match m {
+                LiquidStakingMethod::EmitEventToRelaychain => {
+                    Self::emit_event_to_relaychain();
+                }
+                LiquidStakingMethod::TransferToRelaychain(&amount) => {
+                    Self::transfer_to_relaychain(who, amount);
+                }
+                _ => print!("error"),
+            }
+        }else {
+            // error
+            print!("error");
+        }
+        
     }
 
     //pallet type
     //method type
     //argument list
-    fn response_from_relaychain() -> StakingOperation {
-
-        // 将以下3个方法wrap到call中
-        // #[pallet::weight(10_000)]
-        // #[transactional]
-        // pub fn trigger_new_era(
-        //     origin: OriginFor<T>, 
-        //     #[pallet::compact] amount: Balance
-        // ) -> DispatchResultWithPostInfo {
-            
-        //     T::LiquidStakingHub::trigger_new_era(1)?;
-            
-        //     Ok(().into())
-        // }
-
-        // #[pallet::weight(10_000)]
-        // #[transactional]
-        // pub fn record_reward(
-        //     origin: OriginFor<T>,
-        //     #[pallet::compact] amount: Balance,
-        // ) -> DispatchResultWithPostInfo {
-            
-        //     T::LiquidStakingHub::record_reward();
-            
-        //     Ok(().into())
-        // }
-
-        // #[pallet::weight(10_000)]
-        // #[transactional]
-        // pub fn record_slash(
-        //     origin: OriginFor<T>,
-        //     #[pallet::compact] amount: Balance,
-        // ) -> DispatchResultWithPostInfo {
-        //     T::LiquidStakingHub::record_slash();
-        //     Ok(().into())
-        // }
-
-        ensure!(Self::current_phase() == Phase::DispatchToStaking,"big error");
-        StakingOperationHistory::<T>::insert(Self::current_era(),(StakingOperationType::BondExtra,StakingOperationStatus::Successed,2));
-        CurrentPhase::<T>::put(Phase::RecordStakingOperation);
+    fn response_from_relaychain(
+        who: &T::AccountId,
+        parachain_pallet: &ParachainPallet,
+        response_status: &ResponseStatus,
+    ) -> DispatchResultWithPostInfo {
+        if let ParachainPallet::LiquidStaking(m) = parachain_pallet {
+            match m {
+                LiquidStakingMethod::TriggerNewEra(&era_index) => {
+                    Self::trigger_new_era(era_index);
+                },
+                LiquidStakingMethod::RecordReward(&amount) => {
+                    Self::record_reward();
+                },
+                LiquidStakingMethod::RecordSlash(&amount) => {
+                    Self::record_slash();
+                },
+                LiquidStakingMethod::RecordBondResponse => {
+                    Self::record_bond_response();
+                },
+                LiquidStakingMethod::RecordBondExtraResponse => {
+                    Self::record_bond_extra_response();
+                },
+                LiquidStakingMethod::RecordUnbondResponse => {
+                    Self::record_unbond_response();
+                },
+                LiquidStakingMethod::RecordRebondResponse => {
+                    Self::record_rebond_response();
+                },
+            }
+        }else {
+            // error
+            print!("error");
+        }
     }
 }

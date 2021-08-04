@@ -18,6 +18,7 @@
 
 pub mod network;
 pub mod liquid_staking;
+pub mod relaychain_bridge;
 
 use codec::{Decode, Encode};
 use sp_runtime::{
