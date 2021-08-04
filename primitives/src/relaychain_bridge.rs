@@ -2,11 +2,11 @@
 use frame_support::pallet_prelude::DispatchResultWithPostInfo;
 use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
-use crate::liquid_staking::LiquidStakingMethod;
+use crate::liquid_staking::LiquidStakingHubMethod;
 
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub enum ParachainPallet {
-	LiquidStaking(LiquidStakingMethod),
+	LiquidStaking(LiquidStakingHubMethod),
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]

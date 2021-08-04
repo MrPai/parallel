@@ -17,7 +17,7 @@ pub enum StakingOperationType {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-pub enum LiquidStakingMethod {
+pub enum LiquidStakingHubMethod {
 	// Hedging,
 	EmitEventToRelaychain,
 	TransferToRelaychain(Balance),
@@ -28,6 +28,7 @@ pub enum LiquidStakingMethod {
     RecordBondExtraResponse,
     RecordUnbondResponse,
     RecordRebondResponse,
+	RecordXcmTransfer,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]

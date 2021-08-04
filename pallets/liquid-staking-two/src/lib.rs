@@ -34,7 +34,7 @@ use orml_traits::{MultiCurrency, MultiCurrencyExtended};
 
 pub use pallet::*;
 use primitives::{Amount, Balance, CurrencyId, ExchangeRateProvider, Rate, Ratio};
-use primitives::liquid_staking::{EraIndex,LiquidStakingProtocol, LiquidStakingHub, Phase,StakingOperationType,LiquidStakingMethod};
+use primitives::liquid_staking::{EraIndex,LiquidStakingProtocol, LiquidStakingHub, Phase,StakingOperationType,LiquidStakingHubMethod};
 use primitives::relaychain_bridge::{RelaychainBridgeHub,ResponseStatus, ParachainPallet};
 
 /// Container for pending balance information
@@ -442,10 +442,10 @@ impl<T: Config> RelaychainBridgeHub<T::AccountId> for Pallet<T> {
     ) -> DispatchResultWithPostInfo {
         if let ParachainPallet::LiquidStaking(m) = parachain_pallet {
             match m {
-                LiquidStakingMethod::EmitEventToRelaychain => {
+                LiquidStakingHubMethod::EmitEventToRelaychain => {
                     Self::emit_event_to_relaychain();
                 }
-                LiquidStakingMethod::TransferToRelaychain(&amount) => {
+                LiquidStakingHubMethod::TransferToRelaychain(&amount) => {
                     Self::transfer_to_relaychain(who, amount);
                 }
                 _ => print!("error"),
@@ -460,32 +460,32 @@ impl<T: Config> RelaychainBridgeHub<T::AccountId> for Pallet<T> {
     //pallet type
     //method type
     //argument list
-    fn response_from_relaychain(
+    fn response_from_relaychain (
         who: &T::AccountId,
         parachain_pallet: &ParachainPallet,
         response_status: &ResponseStatus,
     ) -> DispatchResultWithPostInfo {
         if let ParachainPallet::LiquidStaking(m) = parachain_pallet {
             match m {
-                LiquidStakingMethod::TriggerNewEra(&era_index) => {
+                LiquidStakingHubMethod::TriggerNewEra(&era_index) => {
                     Self::trigger_new_era(era_index);
                 },
-                LiquidStakingMethod::RecordReward(&amount) => {
+                LiquidStakingHubMethod::RecordReward(&amount) => {
                     Self::record_reward();
                 },
-                LiquidStakingMethod::RecordSlash(&amount) => {
+                LiquidStakingHubMethod::RecordSlash(&amount) => {
                     Self::record_slash();
                 },
-                LiquidStakingMethod::RecordBondResponse => {
+                LiquidStakingHubMethod::RecordBondResponse => {
                     Self::record_bond_response();
                 },
-                LiquidStakingMethod::RecordBondExtraResponse => {
+                LiquidStakingHubMethod::RecordBondExtraResponse => {
                     Self::record_bond_extra_response();
                 },
-                LiquidStakingMethod::RecordUnbondResponse => {
+                LiquidStakingHubMethod::RecordUnbondResponse => {
                     Self::record_unbond_response();
                 },
-                LiquidStakingMethod::RecordRebondResponse => {
+                LiquidStakingHubMethod::RecordRebondResponse => {
                     Self::record_rebond_response();
                 },
             }
