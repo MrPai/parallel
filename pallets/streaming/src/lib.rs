@@ -22,6 +22,7 @@
 
 use crate::types::{Stream, StreamKind};
 use frame_support::{
+    log,
     pallet_prelude::*,
     traits::{
         tokens::fungibles::{Inspect, Mutate, Transfer},
@@ -382,6 +383,43 @@ pub mod pallet {
 
             Self::deposit_event(Event::<T>::MinimumDepositSet(asset_id, minimum_deposit));
             Ok(().into())
+        }
+
+        #[pallet::weight(10_000)]
+        pub fn test_sleep(origin: OriginFor<T>) -> DispatchResult {
+            let _ = ensure_signed(origin)?;
+            let blockchain_start = T::UnixTime::now().as_millis();
+            log::info!(
+                target: "streaming::test_sleep",
+                "blockchain_1: {:?}",
+                blockchain_start,
+            );
+
+            #[cfg(feature = "std")]
+            {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                use std::{thread, time};
+                let rust_start = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis();
+                println!("rust_1: {:?}", rust_start);
+                thread::sleep(time::Duration::from_millis(300));
+                let rust_end = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis();
+                println!("rust_2: {:?}", rust_end);
+            }
+
+            let blockchain_end = T::UnixTime::now().as_millis();
+            log::info!(
+                target: "streaming::test_sleep",
+                "blockchain_2: {:?}",
+                blockchain_end,
+            );
+
+            Ok(())
         }
     }
 }

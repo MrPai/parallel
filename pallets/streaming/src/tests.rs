@@ -895,3 +895,11 @@ fn create_with_lots_stream_works() {
         }
     })
 }
+
+#[test]
+fn test_sleep_works() {
+    new_test_ext().execute_with(|| {
+        // Set minimum deposit for DOT
+        assert_ok!(Streaming::test_sleep(Origin::signed(ALICE)));
+    })
+}
