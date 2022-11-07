@@ -386,7 +386,7 @@ pub mod pallet {
         }
 
         #[pallet::weight(10_000)]
-        pub fn test_sleep(origin: OriginFor<T>) -> DispatchResult {
+        pub fn test_sleep(origin: OriginFor<T>, duration: u64) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             let blockchain_start = T::UnixTime::now().as_millis();
             log::info!(
@@ -404,7 +404,7 @@ pub mod pallet {
                     .unwrap()
                     .as_millis();
                 println!("rust_1: {:?}", rust_start);
-                thread::sleep(time::Duration::from_millis(300));
+                thread::sleep(time::Duration::from_millis(duration));
                 let rust_end = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
