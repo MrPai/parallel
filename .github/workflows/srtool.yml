@@ -3,7 +3,7 @@ name: Srtool build
 on:
   push:
     branches:
-      - kerria3350-withEvm
+      - master
     tags:
       - "v*"
 
